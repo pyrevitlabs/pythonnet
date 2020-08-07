@@ -5,7 +5,7 @@ namespace Python.Runtime
     /// Represents a reference to a Python object, that is being lent, and
     /// can only be safely used until execution returns to the caller.
     /// </summary>
-    readonly ref struct BorrowedReference
+    public readonly ref struct BorrowedReference
     {
         readonly IntPtr pointer;
         public bool IsNull => this.pointer == IntPtr.Zero;

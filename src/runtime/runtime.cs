@@ -794,7 +794,7 @@ namespace Python.Runtime
         internal static extern void PyEval_RestoreThread(IntPtr tstate);
 
         [DllImport(_PythonDll, CallingConvention = CallingConvention.Cdecl)]
-        internal static extern IntPtr PyEval_GetBuiltins();
+        public static extern IntPtr PyEval_GetBuiltins();
 
         [DllImport(_PythonDll, CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr PyEval_GetGlobals();
@@ -1559,7 +1559,7 @@ namespace Python.Runtime
             return PyUnicode_FromUnicode(s, s.Length);
         }
 
-        internal static string GetManagedString(in BorrowedReference borrowedReference)
+        public static string GetManagedString(in BorrowedReference borrowedReference)
             => GetManagedString(borrowedReference.DangerousGetAddress());
         /// <summary>
         /// Function to access the internal PyUnicode/PyString object and
@@ -1625,7 +1625,7 @@ namespace Python.Runtime
         internal static extern int PyDict_SetItem(IntPtr pointer, IntPtr key, IntPtr value);
 
         [DllImport(_PythonDll, CallingConvention = CallingConvention.Cdecl)]
-        internal static extern int PyDict_SetItemString(IntPtr pointer, string key, IntPtr value);
+        public static extern int PyDict_SetItemString(IntPtr pointer, string key, IntPtr value);
 
         [DllImport(_PythonDll, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int PyDict_DelItem(IntPtr pointer, IntPtr key);
@@ -1683,13 +1683,13 @@ namespace Python.Runtime
         [DllImport(_PythonDll, CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr PyList_AsTuple(IntPtr pointer);
 
-        internal static BorrowedReference PyList_GetItem(IntPtr pointer, long index)
+        public static BorrowedReference PyList_GetItem(IntPtr pointer, long index)
         {
             return PyList_GetItem(pointer, new IntPtr(index));
         }
 
         [DllImport(_PythonDll, CallingConvention = CallingConvention.Cdecl)]
-        private static extern BorrowedReference PyList_GetItem(IntPtr pointer, IntPtr index);
+        public static extern BorrowedReference PyList_GetItem(IntPtr pointer, IntPtr index);
 
         internal static int PyList_SetItem(IntPtr pointer, long index, IntPtr value)
         {
@@ -1699,7 +1699,7 @@ namespace Python.Runtime
         [DllImport(_PythonDll, CallingConvention = CallingConvention.Cdecl)]
         private static extern int PyList_SetItem(IntPtr pointer, IntPtr index, IntPtr value);
 
-        internal static int PyList_Insert(BorrowedReference pointer, long index, IntPtr value)
+        public static int PyList_Insert(BorrowedReference pointer, long index, IntPtr value)
         {
             return PyList_Insert(pointer, new IntPtr(index), value);
         }
@@ -1708,7 +1708,7 @@ namespace Python.Runtime
         private static extern int PyList_Insert(BorrowedReference pointer, IntPtr index, IntPtr value);
 
         [DllImport(_PythonDll, CallingConvention = CallingConvention.Cdecl)]
-        internal static extern int PyList_Append(BorrowedReference pointer, IntPtr value);
+        public static extern int PyList_Append(BorrowedReference pointer, IntPtr value);
 
         [DllImport(_PythonDll, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int PyList_Reverse(BorrowedReference pointer);
