@@ -25,12 +25,14 @@
     <Optimize>true</Optimize>
     <DebugType>pdbonly</DebugType>
     <DocumentationFile>bin\pyRevitLabs.PythonNet.xml</DocumentationFile>
+    <PostBuildEvent>copy "$(TargetDir)pyRevitLabs.PythonNet.dll" "$(TargetDir)..\..\..\..\..\..\bin\engines\378"</PostBuildEvent>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'ReleasePY38'">
     <DefineConstants Condition="'$(DefineConstants)' == ''">PYTHON3;PYTHON38;UCS2</DefineConstants>
     <Optimize>true</Optimize>
     <DebugType>pdbonly</DebugType>
     <DocumentationFile>bin\pyRevitLabs.PythonNet.xml</DocumentationFile>
+    <PostBuildEvent>copy "$(TargetDir)pyRevitLabs.PythonNet.dll" "$(TargetDir)..\..\..\..\..\..\bin\engines\385"</PostBuildEvent>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
