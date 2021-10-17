@@ -6,6 +6,10 @@
     <Configurations>Debug;ReleasePY37;ReleasePY38</Configurations>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <DefaultItemExcludes>Properties\AssemblyInfo.cs</DefaultItemExcludes>
+  </PropertyGroup>
+
   <PropertyGroup Condition=" '$(Configuration)' == 'ReleasePY37'">
     <DefineConstants>$(DefineConstants);PYTHON3;PYTHON37;UCS2</DefineConstants>
     <EngineDir>CPY378</EngineDir>
@@ -15,10 +19,6 @@
     <DefineConstants>$(DefineConstants);PYTHON3;PYTHON38;UCS2</DefineConstants>
     <EngineDir>CPY385</EngineDir>
   </PropertyGroup>
-
-  <ItemGroup>
-    <DefaultItemExcludes>Properties\AssemblyInfo.cs</DefaultItemExcludes>
-  </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="resources\clr.py">
