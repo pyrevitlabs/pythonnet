@@ -4,6 +4,7 @@
     <AssemblyName>pyRevitLabs.PythonNet</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Configurations>Debug;ReleasePY37;ReleasePY38</Configurations>
+    <TargetFrameworks>netstandard2.0</TargetFrameworks>
   </PropertyGroup>
 
   <PropertyGroup>
