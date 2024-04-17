@@ -46,7 +46,7 @@ class MemberNamesTest(object):
         return x + y
 
 a = MemberNamesTest()
-", null, locals.Handle);
+", null, locals);
 
             PyObject a = locals.GetItem("a");
 
@@ -59,9 +59,53 @@ a = MemberNamesTest()
         }
 
         [Test]
-        public void InvokeNull() {
+        public void InvokeNull()
+        {
             var list = PythonEngine.Eval("list");
             Assert.Throws<ArgumentNullException>(() => list.Invoke(new PyObject[] {null}));
         }
+
+        [Test]
+        public void AsManagedObjectInvalidCast()
+        {
+            var list = PythonEngine.Eval("list");
+            Assert.Throws<InvalidCastException>(() => list.AsManagedObject(typeof(int)));
+        }
+
+        [Test]
+        public void UnaryMinus_ThrowsOnBadType()
+        {
+            dynamic list = new PyList();
+            var error = Assert.Throws<PythonException>(() => list = -list);
+            Assert.AreEqual("TypeError", error.Type.Name);
+        }
+
+        [Test]
+        [Obsolete]
+        public void GetAttrDefault_IgnoresAttributeErrorOnly()
+        {
+            var ob = new PyObjectTestMethods().ToPython();
+            using var fallback = new PyList();
+            var attrErrResult = ob.GetAttr(nameof(PyObjectTestMethods.RaisesAttributeError), fallback);
+            Assert.IsTrue(PythonReferenceComparer.Instance.Equals(fallback, attrErrResult));
+
+            var typeErrResult = Assert.Throws<PythonException>(
+                () => ob.GetAttr(nameof(PyObjectTestMethods.RaisesTypeError), fallback)
+            );
+            Assert.AreEqual(Exceptions.TypeError, typeErrResult.Type);
+        }
+
+        // regression test from https://github.com/pythonnet/pythonnet/issues/1642
+        [Test]
+        public void InheritedMethodsAutoacquireGIL()
+        {
+            PythonEngine.Exec("from System import String\nString.Format('{0},{1}', 1, 2)");
+        }
+    }
+
+    public class PyObjectTestMethods
+    {
+        public string RaisesAttributeError => throw new PythonException(new PyType(Exceptions.AttributeError), value: null, traceback: null);
+        public string RaisesTypeError => throw new PythonException(new PyType(Exceptions.TypeError), value: null, traceback: null);
     }
 }

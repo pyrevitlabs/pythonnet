@@ -25,20 +25,19 @@ namespace Python.EmbeddingTest
         public void TestWithPositive()
         {
             var locals = new PyDict();
-            
+
             PythonEngine.Exec(@"
 class CmTest:
     def __enter__(self):
-        print('Enter')
         return self
     def __exit__(self, t, v, tb):
         # Exception not handled, return will be False
-        print('Exit')
+        pass
     def fail(self):
         return 5 / 0
 
 a = CmTest()
-", null, locals.Handle);
+", null, locals);
 
             var a = locals.GetItem("a");
 
@@ -51,7 +50,8 @@ a = CmTest()
             }
             catch (PythonException e)
             {
-                Assert.IsTrue(e.Message.Contains("ZeroDivisionError"));
+                TestContext.Out.WriteLine(e.Message);
+                Assert.IsTrue(e.Type.Name == "ZeroDivisionError");
             }
         }
 
@@ -76,7 +76,7 @@ class CmTest:
         return 5 / 0
 
 a = CmTest()
-", null, locals.Handle);
+", null, locals);
 
             var a = locals.GetItem("a");
             Py.With(a, cmTest =>

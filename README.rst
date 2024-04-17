@@ -1,12 +1,15 @@
 pythonnet - Python.NET
 ===========================
 
-|Join the chat at https://gitter.im/pythonnet/pythonnet|
+|Join the chat at https://gitter.im/pythonnet/pythonnet| |stackexchange shield|
 
-|appveyor shield| |travis shield| |codecov shield|
+|gh shield|
 
-|license shield| |pypi package version| |conda-forge version| |python supported shield|
-|stackexchange shield|
+|license shield|
+
+|pypi package version| |conda-forge version| |python supported shield|
+
+|nuget preview shield| |nuget release shield|
 
 Python.NET is a package that gives Python programmers nearly
 seamless integration with the .NET Common Language Runtime (CLR) and
@@ -19,7 +22,7 @@ Calling .NET code from Python
 
 Python.NET allows CLR namespaces to be treated essentially as Python packages.
 
-.. code-block::
+.. code-block:: python
 
    import clr
    from System import String
@@ -28,15 +31,41 @@ Python.NET allows CLR namespaces to be treated essentially as Python packages.
 To load an assembly, use the ``AddReference`` function in the ``clr``
 module:
 
-.. code-block::
+.. code-block:: python
 
    import clr
    clr.AddReference("System.Windows.Forms")
    from System.Windows.Forms import Form
 
+By default, Mono will be used on Linux and macOS, .NET Framework on Windows. For
+details on the loading of different runtimes, please refer to the documentation.
+
+.NET Core
+~~~~~~~~~
+
+If .NET Core is installed in a default location or the ``dotnet`` CLI tool is on
+the ``PATH``, loading it instead of the default (Mono/.NET Framework) runtime
+just requires setting either the environment variable
+``PYTHONNET_RUNTIME=coreclr`` or calling ``pythonnet.load`` explicitly:
+
+.. code-block:: python
+
+   from pythonnet import load
+   load("coreclr")
+
+   import clr
+
+
 Embedding Python in .NET
 ------------------------
 
+-  You must set ``Runtime.PythonDLL`` property or ``PYTHONNET_PYDLL`` environment variable
+   starting with version 3.0, otherwise you will receive ``BadPythonDllException``
+   (internal, derived from ``MissingMethodException``) upon calling ``Initialize``.
+   Typical values are ``python38.dll`` (Windows), ``libpython3.8.dylib`` (Mac),
+   ``libpython3.8.so`` (most other Unix-like operating systems).
+-  Then call ``PythonEngine.Initialize()``. If you plan to use Python objects from
+   multiple threads, also call ``PythonEngine.BeginAllowThreads()``.
 -  All calls to python should be inside a
    ``using (Py.GIL()) {/* Your code here */}`` block.
 -  Import python modules using ``dynamic mod = Py.Import("mod")``, then
@@ -56,6 +85,7 @@ Example
 
    static void Main(string[] args)
    {
+       PythonEngine.Initialize();
        using (Py.GIL())
        {
            dynamic np = Py.Import("numpy");
@@ -64,7 +94,7 @@ Example
            dynamic sin = np.sin;
            Console.WriteLine(sin(5));
 
-           double c = np.cos(5) + sin(5);
+           double c = (double)(np.cos(5) + sin(5));
            Console.WriteLine(c);
 
            dynamic a = np.array(new List<float> { 1, 2, 3 });
@@ -80,7 +110,7 @@ Example
 
 Output:
 
-.. code::
+.. code:: csharp
 
    1.0
    -0.958924274663
@@ -110,12 +140,6 @@ This project is supported by the `.NET Foundation <https://dotnetfoundation.org>
 
 .. |Join the chat at https://gitter.im/pythonnet/pythonnet| image:: https://badges.gitter.im/pythonnet/pythonnet.svg
    :target: https://gitter.im/pythonnet/pythonnet?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
-.. |appveyor shield| image:: https://img.shields.io/appveyor/ci/pythonnet/pythonnet/master.svg?label=AppVeyor
-   :target: https://ci.appveyor.com/project/pythonnet/pythonnet/branch/master
-.. |travis shield| image:: https://img.shields.io/travis/pythonnet/pythonnet/master.svg?label=Travis
-   :target: https://travis-ci.org/pythonnet/pythonnet
-.. |codecov shield| image:: https://img.shields.io/codecov/c/github/pythonnet/pythonnet/master.svg?label=Codecov
-   :target: https://codecov.io/github/pythonnet/pythonnet
 .. |license shield| image:: https://img.shields.io/badge/license-MIT-blue.svg?maxAge=3600
    :target: ./LICENSE
 .. |pypi package version| image:: https://img.shields.io/pypi/v/pythonnet.svg
@@ -126,3 +150,9 @@ This project is supported by the `.NET Foundation <https://dotnetfoundation.org>
    :target: http://stackoverflow.com/questions/tagged/python.net
 .. |conda-forge version| image:: https://img.shields.io/conda/vn/conda-forge/pythonnet.svg
    :target: https://anaconda.org/conda-forge/pythonnet
+.. |nuget preview shield| image:: https://img.shields.io/nuget/vpre/pythonnet
+   :target: https://www.nuget.org/packages/pythonnet/
+.. |nuget release shield| image:: https://img.shields.io/nuget/v/pythonnet
+   :target: https://www.nuget.org/packages/pythonnet/
+.. |gh shield| image:: https://github.com/pythonnet/pythonnet/workflows/GitHub%20Actions/badge.svg
+   :target: https://github.com/pythonnet/pythonnet/actions?query=branch%3Amaster

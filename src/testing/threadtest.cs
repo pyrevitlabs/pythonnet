@@ -11,8 +11,8 @@ namespace Python.Test
         private static PyObject module;
 
         private static string testmod =
-            "import CLR\n" +
-            "from CLR.Python.Test import ThreadTest\n" +
+            "import clr\n" +
+            "from Python.Test import ThreadTest\n" +
             "\n" +
             "def echostring(value):\n" +
             "    return value\n" +
@@ -29,12 +29,11 @@ namespace Python.Test
         /// </summary>
         public static string CallEchoString(string arg)
         {
-            IntPtr gs = PythonEngine.AcquireLock();
-            try
+            using (Py.GIL())
             {
                 if (module == null)
                 {
-                    module = PythonEngine.ModuleFromString("tt", testmod);
+                    module = PyModule.FromString("tt", testmod);
                 }
                 PyObject func = module.GetAttr("echostring");
                 var parg = new PyString(arg);
@@ -45,20 +44,15 @@ namespace Python.Test
                 temp.Dispose();
                 return result;
             }
-            finally
-            {
-                PythonEngine.ReleaseLock(gs);
-            }
         }
 
         public static string CallEchoString2(string arg)
         {
-            IntPtr gs = PythonEngine.AcquireLock();
-            try
+            using (Py.GIL())
             {
                 if (module == null)
                 {
-                    module = PythonEngine.ModuleFromString("tt", testmod);
+                    module = PyModule.FromString("tt", testmod);
                 }
 
                 PyObject func = module.GetAttr("echostring2");
@@ -69,10 +63,6 @@ namespace Python.Test
                 parg.Dispose();
                 temp.Dispose();
                 return result;
-            }
-            finally
-            {
-                PythonEngine.ReleaseLock(gs);
             }
         }
     }

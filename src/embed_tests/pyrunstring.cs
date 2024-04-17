@@ -6,18 +6,16 @@ namespace Python.EmbeddingTest
 {
     public class RunStringTest
     {
-        private Py.GILState _gs;
-
-        [SetUp]
+        [OneTimeSetUp]
         public void SetUp()
         {
-            _gs = Py.GIL();
+            PythonEngine.Initialize();
         }
 
-        [TearDown]
+        [OneTimeTearDown]
         public void Dispose()
         {
-            _gs.Dispose();
+            PythonEngine.Shutdown();
         }
 
         [Test]
@@ -39,7 +37,7 @@ namespace Python.EmbeddingTest
             locals.SetItem("sys", sys);
             locals.SetItem("a", new PyInt(10));
 
-            object b = PythonEngine.Eval("sys.attr1 + a + 1", null, locals.Handle)
+            object b = PythonEngine.Eval("sys.attr1 + a + 1", null, locals)
                 .AsManagedObject(typeof(int));
             Assert.AreEqual(111, b);
         }
@@ -53,7 +51,7 @@ namespace Python.EmbeddingTest
             locals.SetItem("sys", sys);
             locals.SetItem("a", new PyInt(10));
 
-            PythonEngine.Exec("c = sys.attr1 + a + 1", null, locals.Handle);
+            PythonEngine.Exec("c = sys.attr1 + a + 1", null, locals);
             object c = locals.GetItem("c").AsManagedObject(typeof(int));
             Assert.AreEqual(111, c);
         }

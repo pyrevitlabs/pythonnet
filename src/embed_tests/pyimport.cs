@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
+
 using NUnit.Framework;
 using Python.Runtime;
 
@@ -19,33 +21,27 @@ namespace Python.EmbeddingTest
     /// </remarks>
     public class PyImportTest
     {
-        private IntPtr _gs;
-
-        [SetUp]
+        [OneTimeSetUp]
         public void SetUp()
         {
             PythonEngine.Initialize();
-            _gs = PythonEngine.AcquireLock();
 
             /* Append the tests directory to sys.path
              * using reflection to circumvent the private
              * modifiers placed on most Runtime methods. */
-#if NETCOREAPP
-            const string s = "../../fixtures";
-#else
-            const string s = "../fixtures";
-#endif
-            string testPath = Path.Combine(TestContext.CurrentContext.TestDirectory, s);
+            string testPath = Path.Combine(TestContext.CurrentContext.TestDirectory, "fixtures");
+            TestContext.Out.WriteLine(testPath);
 
-            IntPtr str = Runtime.Runtime.PyString_FromString(testPath);
-            IntPtr path = Runtime.Runtime.PySys_GetObject("path");
-            Runtime.Runtime.PyList_Append(new BorrowedReference(path), str);
+            using var str = Runtime.Runtime.PyString_FromString(testPath);
+            Assert.IsFalse(str.IsNull());
+            BorrowedReference path = Runtime.Runtime.PySys_GetObject("path");
+            Assert.IsFalse(path.IsNull);
+            Runtime.Runtime.PyList_Append(path, str.Borrow());
         }
 
-        [TearDown]
+        [OneTimeTearDown]
         public void Dispose()
         {
-            PythonEngine.ReleaseLock(_gs);
             PythonEngine.Shutdown();
         }
 
@@ -55,7 +51,7 @@ namespace Python.EmbeddingTest
         [Test]
         public void TestDottedName()
         {
-            PyObject module = PythonEngine.ImportModule("PyImportTest.test.one");
+            var module = PyModule.Import("PyImportTest.test.one");
             Assert.IsNotNull(module);
         }
 
@@ -65,7 +61,7 @@ namespace Python.EmbeddingTest
         [Test]
         public void TestSysArgsImportException()
         {
-            PyObject module = PythonEngine.ImportModule("PyImportTest.sysargv");
+            var module = PyModule.Import("PyImportTest.sysargv");
             Assert.IsNotNull(module);
         }
 
@@ -83,5 +79,35 @@ namespace Python.EmbeddingTest
             Assert.AreEqual("2", foo.FOO.ToString());
             Assert.AreEqual("2", foo.test_foo().ToString());
         }
+
+        [Test]
+        public void BadAssembly()
+        {
+            string path = Runtime.Runtime.PythonDLL;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                path = @"C:\Windows\System32\kernel32.dll";
+            }
+
+            Assert.IsTrue(File.Exists(path), $"Test DLL {path} does not exist!");
+
+            string code = $@"
+import clr
+clr.AddReference('{path}')
+";
+
+            Assert.Throws<BadImageFormatException>(() => PythonEngine.Exec(code));
+        }
     }
 }
+
+// regression for https://github.com/pythonnet/pythonnet/issues/1601
+// initialize fails if a class derived from IEnumerable is in global namespace
+public class PublicEnumerator : System.Collections.IEnumerable
+{
+    public System.Collections.IEnumerator GetEnumerator()
+    {
+        return null;
+    }
+}
+

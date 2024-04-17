@@ -11,7 +11,6 @@ namespace Python.Test
     {
     }
 
-
     public interface ISayHello1
     {
         string SayHello();
@@ -43,6 +42,27 @@ namespace Python.Test
             return "hello 2";
         }
 
+        public ISayHello1 GetISayHello1()
+        {
+            return this;
+        }
+
+        public void GetISayHello2(out ISayHello2 hello2)
+        {
+            hello2 = this;
+        }
+
+        public ISayHello1 GetNoSayHello(out ISayHello2 hello2)
+        {
+            hello2 = null;
+            return null;
+        }
+
+        public ISayHello1 [] GetISayHello1Array()
+        {
+            return new[] { this };
+        }
+
         public interface IPublic
         {
         }
@@ -57,6 +77,41 @@ namespace Python.Test
 
         private interface IPrivate
         {
+        }
+    }
+
+    public interface IOutArg
+    {
+        string MyMethod_Out(string name, out int index);
+    }
+
+    public class OutArgCaller
+    {
+        public static int CallMyMethod_Out(IOutArg myInterface)
+        {
+            myInterface.MyMethod_Out("myclient", out int index);
+            return index;
+        }
+    }
+
+    public interface IGenericInterface<T>
+    {
+        public T Get(T x);
+    }
+
+    public class SpecificInterfaceUser
+    {
+        public SpecificInterfaceUser(IGenericInterface<int> some, int x)
+        {
+            some.Get(x);
+        }
+    }
+
+    public class GenericInterfaceUser<T>
+    {
+        public GenericInterfaceUser(IGenericInterface<T> some, T x)
+        {
+            some.Get(x);
         }
     }
 }

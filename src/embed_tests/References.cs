@@ -5,25 +5,23 @@ namespace Python.EmbeddingTest
 
     public class References
     {
-        private Py.GILState _gs;
-
-        [SetUp]
+        [OneTimeSetUp]
         public void SetUp()
         {
-            _gs = Py.GIL();
+            PythonEngine.Initialize();
         }
 
-        [TearDown]
+        [OneTimeTearDown]
         public void Dispose()
         {
-            _gs.Dispose();
+            PythonEngine.Shutdown();
         }
 
         [Test]
         public void MoveToPyObject_SetsNull()
         {
             var dict = new PyDict();
-            NewReference reference = Runtime.PyDict_Items(dict.Handle);
+            NewReference reference = Runtime.PyDict_Items(dict.Reference);
             try
             {
                 Assert.IsFalse(reference.IsNull());
@@ -41,15 +39,9 @@ namespace Python.EmbeddingTest
         public void CanBorrowFromNewReference()
         {
             var dict = new PyDict();
-            NewReference reference = Runtime.PyDict_Items(dict.Handle);
-            try
-            {
-                PythonException.ThrowIfIsNotZero(Runtime.PyList_Reverse(reference));
-            }
-            finally
-            {
-                reference.Dispose();
-            }
+            using NewReference reference = Runtime.PyDict_Items(dict.Reference);
+            BorrowedReference borrowed = reference.BorrowOrThrow();
+            PythonException.ThrowIfIsNotZero(Runtime.PyList_Reverse(borrowed));
         }
     }
 }

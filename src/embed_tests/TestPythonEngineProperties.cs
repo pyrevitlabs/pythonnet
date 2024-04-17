@@ -9,6 +9,7 @@ namespace Python.EmbeddingTest
         [Test]
         public static void GetBuildinfoDoesntCrash()
         {
+            PythonEngine.Initialize();
             using (Py.GIL())
             {
                 string s = PythonEngine.BuildInfo;
@@ -21,6 +22,7 @@ namespace Python.EmbeddingTest
         [Test]
         public static void GetCompilerDoesntCrash()
         {
+            PythonEngine.Initialize();
             using (Py.GIL())
             {
                 string s = PythonEngine.Compiler;
@@ -34,6 +36,7 @@ namespace Python.EmbeddingTest
         [Test]
         public static void GetCopyrightDoesntCrash()
         {
+            PythonEngine.Initialize();
             using (Py.GIL())
             {
                 string s = PythonEngine.Copyright;
@@ -46,6 +49,7 @@ namespace Python.EmbeddingTest
         [Test]
         public static void GetPlatformDoesntCrash()
         {
+            PythonEngine.Initialize();
             using (Py.GIL())
             {
                 string s = PythonEngine.Platform;
@@ -58,6 +62,7 @@ namespace Python.EmbeddingTest
         [Test]
         public static void GetVersionDoesntCrash()
         {
+            PythonEngine.Initialize();
             using (Py.GIL())
             {
                 string s = PythonEngine.Version;
@@ -81,7 +86,7 @@ namespace Python.EmbeddingTest
         public static void GetProgramNameDefault()
         {
             PythonEngine.Initialize();
-            string s = PythonEngine.PythonHome;
+            string s = PythonEngine.ProgramName;
 
             Assert.NotNull(s);
             PythonEngine.Shutdown();
@@ -91,9 +96,6 @@ namespace Python.EmbeddingTest
         /// Test default behavior of PYTHONHOME. If ENVVAR is set it will
         /// return the same value. If not, returns EmptyString.
         /// </summary>
-        /// <remarks>
-        /// AppVeyor.yml has been update to tests with ENVVAR set.
-        /// </remarks>
         [Test]
         public static void GetPythonHomeDefault()
         {
@@ -109,22 +111,19 @@ namespace Python.EmbeddingTest
         [Test]
         public void SetPythonHome()
         {
-            // We needs to ensure that engine was started and shutdown at least once before setting dummy home.
-            // Otherwise engine will not run with dummy path with random problem.
-            if (!PythonEngine.IsInitialized)
-            {
-                PythonEngine.Initialize();
-            }
-
+            PythonEngine.Initialize();
+            var pythonHomeBackup = PythonEngine.PythonHome;
             PythonEngine.Shutdown();
 
-            var pythonHomeBackup = PythonEngine.PythonHome;
+            if (pythonHomeBackup == "")
+                Assert.Inconclusive("Can't reset PythonHome to empty string, skipping");
 
             var pythonHome = "/dummypath/";
 
             PythonEngine.PythonHome = pythonHome;
             PythonEngine.Initialize();
 
+            Assert.AreEqual(pythonHome, PythonEngine.PythonHome);
             PythonEngine.Shutdown();
 
             // Restoring valid pythonhome.
@@ -134,15 +133,12 @@ namespace Python.EmbeddingTest
         [Test]
         public void SetPythonHomeTwice()
         {
-            // We needs to ensure that engine was started and shutdown at least once before setting dummy home.
-            // Otherwise engine will not run with dummy path with random problem.
-            if (!PythonEngine.IsInitialized)
-            {
-                PythonEngine.Initialize();
-            }
+            PythonEngine.Initialize();
+            var pythonHomeBackup = PythonEngine.PythonHome;
             PythonEngine.Shutdown();
 
-            var pythonHomeBackup = PythonEngine.PythonHome;
+            if (pythonHomeBackup == "")
+                Assert.Inconclusive("Can't reset PythonHome to empty string, skipping");
 
             var pythonHome = "/dummypath/";
 
@@ -154,6 +150,26 @@ namespace Python.EmbeddingTest
             PythonEngine.Shutdown();
 
             PythonEngine.PythonHome = pythonHomeBackup;
+        }
+
+        [Test]
+        [Ignore("Currently buggy in Python")]
+        public void SetPythonHomeEmptyString()
+        {
+            PythonEngine.Initialize();
+
+            var backup = PythonEngine.PythonHome;
+            if (backup == "")
+            {
+                PythonEngine.Shutdown();
+                Assert.Inconclusive("Can't reset PythonHome to empty string, skipping");
+            }
+            PythonEngine.PythonHome = "";
+
+            Assert.AreEqual("", PythonEngine.PythonHome);
+
+            PythonEngine.PythonHome = backup;
+            PythonEngine.Shutdown();
         }
 
         [Test]
@@ -180,40 +196,38 @@ namespace Python.EmbeddingTest
         [Test]
         public void SetPythonPath()
         {
-            if (Runtime.Runtime.pyversion == "2.7")
+            PythonEngine.Initialize();
+
+            const string moduleName = "pytest";
+            bool importShouldSucceed;
+            try
             {
-                // Assert.Skip outputs as a warning (ie. pending to fix)
-                Assert.Pass();
+                Py.Import(moduleName);
+                importShouldSucceed = true;
+            }
+            catch
+            {
+                importShouldSucceed = false;
             }
 
-            PythonEngine.Initialize();
-            string path = PythonEngine.PythonPath;
+            string[] paths = Py.Import("sys").GetAttr("path").As<string[]>();
+            string path = string.Join(System.IO.Path.PathSeparator.ToString(), paths);
+
+            // path should not be set to PythonEngine.PythonPath here.
+            // PythonEngine.PythonPath gets the default module search path, not the full search path.
+            // The list sys.path is initialized with this value on interpreter startup;
+            // it can be (and usually is) modified later to change the search path for loading modules.
+            // See https://docs.python.org/3/c-api/init.html#c.Py_GetPath
+            // After PythonPath is set, then PythonEngine.PythonPath will correctly return the full search path.
+
             PythonEngine.Shutdown();
 
             PythonEngine.PythonPath = path;
             PythonEngine.Initialize();
 
             Assert.AreEqual(path, PythonEngine.PythonPath);
-            PythonEngine.Shutdown();
-        }
+            if (importShouldSucceed) Py.Import(moduleName);
 
-        [Test]
-        public void SetPythonPathExceptionOn27()
-        {
-            if (Runtime.Runtime.pyversion != "2.7")
-            {
-                Assert.Pass();
-            }
-
-            PythonEngine.Initialize();
-            string path = PythonEngine.PythonPath;
-            PythonEngine.Shutdown();
-
-            var ex = Assert.Throws<NotSupportedException>(() => PythonEngine.PythonPath = "foo");
-            Assert.AreEqual("Set PythonPath not supported on Python 2", ex.Message);
-
-            PythonEngine.Initialize();
-            Assert.AreEqual(path, PythonEngine.PythonPath);
             PythonEngine.Shutdown();
         }
     }
