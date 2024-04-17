@@ -7,8 +7,6 @@ using NUnit.Framework;
 
 using Python.Runtime;
 
-using PyRuntime = Python.Runtime.Runtime;
-
 namespace Python.EmbeddingTest
 {
     public class TestConverter
@@ -97,7 +95,7 @@ namespace Python.EmbeddingTest
         {
             using (var num = new PyInt(ulong.MaxValue))
             {
-                using var largeNum = PyRuntime.PyNumber_Add(num, num);
+                using var largeNum = Runtime.Runtime.PyNumber_Add(num, num);
                 try
                 {
                     object value;

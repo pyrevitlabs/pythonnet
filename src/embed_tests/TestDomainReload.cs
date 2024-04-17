@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 using NUnit.Framework;
 using Python.Runtime;
 
-using PyRuntime = Python.Runtime.Runtime;
 //
 // This test case is disabled on .NET Standard because it doesn't have all the
 // APIs we use. We could work around that, but .NET Core doesn't implement
@@ -61,11 +60,11 @@ namespace Python.EmbeddingTest
         {
             Assert.IsFalse(PythonEngine.IsInitialized);
             RunAssemblyAndUnload("test1");
-            Assert.That(PyRuntime.Py_IsInitialized() != 0,
+            Assert.That(Runtime.Runtime.Py_IsInitialized() != 0,
                 "On soft-shutdown mode, Python runtime should still running");
 
             RunAssemblyAndUnload("test2");
-            Assert.That(PyRuntime.Py_IsInitialized() != 0,
+            Assert.That(Runtime.Runtime.Py_IsInitialized() != 0,
                 "On soft-shutdown mode, Python runtime should still running");
         }
 
@@ -213,7 +212,7 @@ obj.Field += 10
             // assembly (and Python .NET) to reside
             var theProxy = CreateInstanceInstanceAndUnwrap<Proxy>(domain);
 
-            theProxy.Call(nameof(PythonRunner.InitPython), PyRuntime.PythonDLL);
+            theProxy.Call(nameof(PythonRunner.InitPython), Runtime.Runtime.PythonDLL);
             // From now on use the Proxy to call into the new assembly
             theProxy.RunPython();
 
@@ -281,7 +280,7 @@ obj.Field += 10
                 try
                 {
                     var theProxy = CreateInstanceInstanceAndUnwrap<Proxy>(domain);
-                    theProxy.Call(nameof(PythonRunner.InitPython), PyRuntime.PythonDLL);
+                    theProxy.Call(nameof(PythonRunner.InitPython), Runtime.Runtime.PythonDLL);
 
                     var caller = CreateInstanceInstanceAndUnwrap<T1>(domain);
                     arg = caller.Execute(arg);
@@ -299,7 +298,7 @@ obj.Field += 10
                 try
                 {
                     var theProxy = CreateInstanceInstanceAndUnwrap<Proxy>(domain);
-                    theProxy.Call(nameof(PythonRunner.InitPython), PyRuntime.PythonDLL);
+                    theProxy.Call(nameof(PythonRunner.InitPython), Runtime.Runtime.PythonDLL);
 
                     var caller = CreateInstanceInstanceAndUnwrap<T2>(domain);
                     caller.Execute(arg);
@@ -311,7 +310,7 @@ obj.Field += 10
                 }
             }
 
-            Assert.IsTrue(PyRuntime.Py_IsInitialized() != 0);
+            Assert.IsTrue(Runtime.Runtime.Py_IsInitialized() != 0);
         }
     }
 
@@ -359,7 +358,7 @@ obj.Field += 10
 
         public static void InitPython(string dllName)
         {
-            PyRuntime.PythonDLL = dllName;
+            Runtime.Runtime.PythonDLL = dllName;
             PythonEngine.Initialize();
             _state = PythonEngine.BeginAllowThreads();
         }
