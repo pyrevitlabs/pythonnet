@@ -5,6 +5,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Configurations>Debug;ReleasePY37;ReleasePY38</Configurations>
     <TargetFrameworks>netstandard2.0</TargetFrameworks>
+    <UseDefaultBin>true</UseDefaultBin>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -28,6 +29,7 @@
   </ItemGroup>
 
   <Target Name="Deploy" AfterTargets="AfterBuild">
-    <Copy SourceFiles="$(TargetDir)\pyRevitLabs.PythonNet.dll" DestinationFolder="$(PyRevitEnginesDir)\$(EngineDir)" />
+    <Copy SourceFiles="$(TargetDir)\pyRevitLabs.PythonNet.dll" DestinationFolder="$(PyRevitBinDir)\netfx\engines\$(EngineDir)" />
+    <Copy SourceFiles="$(TargetDir)\pyRevitLabs.PythonNet.dll" DestinationFolder="$(PyRevitBinDir)\netcore\engines\$(EngineDir)" />
   </Target>
 </Project>
