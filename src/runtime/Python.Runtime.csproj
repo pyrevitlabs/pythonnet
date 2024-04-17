@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0</TargetFrameworks>
+    <EngineDir>CPY385</EngineDir>
     <AssemblyName>pyRevitLabs.PythonNet</AssemblyName>
     <Platforms>AnyCPU</Platforms>
     <LangVersion>10.0</LangVersion>
