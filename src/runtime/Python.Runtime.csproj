@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0</TargetFrameworks>
-    <EngineDir>CPY385</EngineDir>
     <AssemblyName>pyRevitLabs.PythonNet</AssemblyName>
     <Platforms>AnyCPU</Platforms>
     <LangVersion>10.0</LangVersion>
@@ -62,9 +61,4 @@
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
     <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
   </ItemGroup>
-
-  <Target Name="Deploy" AfterTargets="AfterBuild">
-    <Copy SourceFiles="$(TargetDir)\pyRevitLabs.PythonNet.dll" DestinationFolder="$(PyRevitBinDir)\netfx\engines\$(EngineDir)" />
-    <Copy SourceFiles="$(TargetDir)\pyRevitLabs.PythonNet.dll" DestinationFolder="$(PyRevitBinDir)\netcore\engines\$(EngineDir)" />
-  </Target>
 </Project>
