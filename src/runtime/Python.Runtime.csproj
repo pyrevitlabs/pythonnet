@@ -28,7 +28,7 @@
     <AssemblyOriginatorKeyFile>..\pythonnet.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
 
-    <NoWarn>1591;NU1701</NoWarn>
+    <NoWarn>1591;NU1701;NoCopy04;NoCopy05;NoCopy06</NoWarn>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 
     <IsPackable>true</IsPackable>
