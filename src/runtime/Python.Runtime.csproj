@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0</TargetFrameworks>
+    <AssemblyName>pyRevitLabs.PythonNet</AssemblyName>
     <Platforms>AnyCPU</Platforms>
     <LangVersion>10.0</LangVersion>
     <RootNamespace>Python.Runtime</RootNamespace>
-    <AssemblyName>Python.Runtime</AssemblyName>
     <Nullable>enable</Nullable>
 
     <PackageId>pythonnet</PackageId>
@@ -28,8 +28,12 @@
     <AssemblyOriginatorKeyFile>..\pythonnet.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
 
-    <NoWarn>1591;NU1701</NoWarn>
+    <NoWarn>$(NoWarn);1591;NU1701;NoCopy04;NoCopy05;NoCopy06</NoWarn>
+
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <CodeAnalysisRuleSet />
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
 
     <IsPackable>true</IsPackable>
 
@@ -38,11 +42,6 @@
 
   <PropertyGroup Condition="'$(Configuration)' == 'TraceAlloc'">
     <DefineConstants>$(DefineConstants);TRACE_ALLOC</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <OutputPath>..\..\pythonnet\runtime</OutputPath>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
