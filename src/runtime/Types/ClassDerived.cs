@@ -35,6 +35,7 @@ namespace Python.Runtime
         private static Dictionary<string, AssemblyBuilder> assemblyBuilders;
         private static Dictionary<Tuple<string, string>, ModuleBuilder> moduleBuilders;
         private static readonly Dictionary<string, Type> cache = new();
+        private static readonly Dictionary<string, HashSet<string>> emittedTypeNames = new();
 
         static ClassDerivedObject()
         {
@@ -47,6 +48,7 @@ namespace Python.Runtime
             assemblyBuilders = new Dictionary<string, AssemblyBuilder>();
             moduleBuilders = new Dictionary<Tuple<string, string>, ModuleBuilder>();
             cache.Clear();
+            emittedTypeNames.Clear();
         }
 
         internal ClassDerivedObject(Type tp) : base(tp)
@@ -164,12 +166,11 @@ namespace Python.Runtime
                 assemblyName = "Python.Runtime.Dynamic";
             }
 
-            var typeName = CreateUniqueTypeName(namespaceStr, name, baseType, typeInterfaces);
-            var memberSignature = ExplicitMemberSignature(py_dict);
-            if (memberSignature.Length > 0)
-                typeName += "__" + StableHash(memberSignature);
-            if (cache.TryGetValue(typeName, out Type cachedType))
+            var shapeKey = CreateShapeKey(name, baseType, typeInterfaces, py_dict, assemblyName, moduleName);
+            if (cache.TryGetValue(shapeKey, out Type cachedType))
                 return cachedType;
+
+            var typeName = ReserveTypeName(assemblyName, name, shapeKey);
 
             ModuleBuilder moduleBuilder = GetModuleBuilder(assemblyName, moduleName);
 
@@ -304,7 +305,7 @@ namespace Python.Runtime
             Assembly assembly = Assembly.GetAssembly(type);
             AssemblyManager.ScanAssembly(assembly);
 
-            cache[typeName] = type;
+            cache[shapeKey] = type;
 
             return type;
         }
@@ -329,7 +330,9 @@ namespace Python.Runtime
                     if (value.HasAttr("_clr_property_type_"))
                     {
                         using var propertyType = value.GetAttr("_clr_property_type_");
-                        members.Add("P:" + pyKey + ":" + propertyType);
+                        string accessors = (HasTruthyAttr(value, "fget") ? "g" : "")
+                            + (HasTruthyAttr(value, "fset") ? "s" : "");
+                        members.Add("P:" + pyKey + ":" + propertyType + ":" + accessors);
                     }
                     if (value.HasAttr("_clr_return_type_") && value.HasAttr("_clr_arg_types_"))
                     {
@@ -363,20 +366,51 @@ namespace Python.Runtime
             }
         }
 
-        private static string CreateUniqueTypeName(
-            string? namespaceName,
+        private static bool HasTruthyAttr(PyObject value, string attributeName)
+        {
+            if (!value.HasAttr(attributeName))
+                return false;
+            using var attribute = value.GetAttr(attributeName);
+            return attribute.IsTrue();
+        }
+
+        private static string CreateShapeKey(
             string typeName,
             Type baseType,
-            IEnumerable<Type> interfaces)
+            IEnumerable<Type> interfaces,
+            BorrowedReference py_dict,
+            string assemblyName,
+            string moduleName)
         {
             var builder = new StringBuilder();
-            if (namespaceName != null)
-                builder.Append(namespaceName + ".");
-            builder.Append(baseType.FullName);
+            builder.Append(assemblyName).Append('|').Append(moduleName).Append('|').Append(typeName);
+            builder.Append('|').Append(baseType.AssemblyQualifiedName);
             foreach (Type interfaceType in interfaces)
-                builder.Append("__" + interfaceType.FullName);
-            builder.Append("__" + typeName);
+                builder.Append('|').Append(interfaceType.AssemblyQualifiedName);
+            builder.Append('|').Append(ExplicitMemberSignature(py_dict));
             return builder.ToString();
+        }
+
+        /// <summary>
+        /// Picks the CLR name for a new generated type. The first shape of a Python class keeps
+        /// its visible name so it stays importable from its namespace; later shapes with the same
+        /// name get a short hexadecimal hash suffix because an assembly cannot define a name twice.
+        /// </summary>
+        private static string ReserveTypeName(string assemblyName, string typeName, string shapeKey)
+        {
+            if (!emittedTypeNames.TryGetValue(assemblyName, out HashSet<string> names))
+            {
+                names = new HashSet<string>(StringComparer.Ordinal);
+                emittedTypeNames[assemblyName] = names;
+            }
+
+            string candidate = typeName;
+            string hashedName = typeName + "_" + StableHash(shapeKey);
+            for (int attempt = 1; names.Contains(candidate); attempt++)
+                candidate = attempt == 1 ? hashedName : hashedName + "_" + attempt;
+
+            names.Add(candidate);
+            return candidate;
         }
 
         /// <summary>
