@@ -46,6 +46,7 @@ namespace Python.Runtime
         {
             assemblyBuilders = new Dictionary<string, AssemblyBuilder>();
             moduleBuilders = new Dictionary<Tuple<string, string>, ModuleBuilder>();
+            cache.Clear();
         }
 
         internal ClassDerivedObject(Type tp) : base(tp)
@@ -164,6 +165,9 @@ namespace Python.Runtime
             }
 
             var typeName = CreateUniqueTypeName(namespaceStr, name, baseType, typeInterfaces);
+            var memberSignature = ExplicitMemberSignature(py_dict);
+            if (memberSignature.Length > 0)
+                typeName += "__" + StableHash(memberSignature);
             if (cache.TryGetValue(typeName, out Type cachedType))
                 return cachedType;
 
@@ -303,6 +307,60 @@ namespace Python.Runtime
             cache[typeName] = type;
 
             return type;
+        }
+
+        /// <summary>
+        /// Describes the explicit CLR members a Python class declares, so a redefinition that
+        /// adds, removes or retypes them gets a new generated type instead of a cached one.
+        /// </summary>
+        private static string ExplicitMemberSignature(BorrowedReference py_dict)
+        {
+            if (py_dict == null || !Runtime.PyDict_Check(py_dict))
+                return string.Empty;
+
+            var members = new List<string>();
+            using var dict = new PyDict(py_dict);
+            using var keys = dict.Keys();
+            foreach (PyObject pyKey in keys)
+            {
+                using (pyKey)
+                using (var value = dict[pyKey])
+                {
+                    if (value.HasAttr("_clr_property_type_"))
+                    {
+                        using var propertyType = value.GetAttr("_clr_property_type_");
+                        members.Add("P:" + pyKey + ":" + propertyType);
+                    }
+                    if (value.HasAttr("_clr_return_type_") && value.HasAttr("_clr_arg_types_"))
+                    {
+                        using var returnType = value.GetAttr("_clr_return_type_");
+                        using var argTypes = value.GetAttr("_clr_arg_types_");
+                        string methodName = pyKey.ToString()!;
+                        if (value.HasAttr("_clr_method_name_"))
+                        {
+                            using var declaredName = value.GetAttr("_clr_method_name_");
+                            methodName = declaredName.ToString()!;
+                        }
+                        members.Add("M:" + methodName + ":" + returnType + ":" + argTypes);
+                    }
+                }
+            }
+            members.Sort(StringComparer.Ordinal);
+            return string.Join("|", members);
+        }
+
+        private static string StableHash(string text)
+        {
+            unchecked
+            {
+                uint hash = 2166136261;
+                foreach (char character in text)
+                {
+                    hash ^= character;
+                    hash *= 16777619;
+                }
+                return hash.ToString("x8");
+            }
         }
 
         private static string CreateUniqueTypeName(
