@@ -146,6 +146,20 @@ def test_derived_class():
     x = FunctionsTest.pass_through(ob)
     assert id(x) == id(ob)
 
+
+def test_redefine_class():
+    """Classes with the same CLR identity keep working after redefinition."""
+    InterfaceTestClass = interface_test_class_fixture(test_redefine_class.__name__)
+    ob = InterfaceTestClass()
+    assert ob.foo() == "InterfaceTestClass"
+
+    InterfaceTestClass = redefine_interface_test_class_fixture(
+        test_redefine_class.__name__
+    )
+    ob = InterfaceTestClass()
+    assert ob.foo() == "InterfaceTestClass2"
+
+
 def test_broken_derived_class():
     """Test python class derived from managed type with invalid namespace"""
     with pytest.raises(TypeError):
