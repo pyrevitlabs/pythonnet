@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
+using System.Text;
 
 using Python.Runtime.Native;
 
@@ -33,6 +34,7 @@ namespace Python.Runtime
     {
         private static Dictionary<string, AssemblyBuilder> assemblyBuilders;
         private static Dictionary<Tuple<string, string>, ModuleBuilder> moduleBuilders;
+        private static readonly Dictionary<string, Type> cache = new();
 
         static ClassDerivedObject()
         {
@@ -161,6 +163,10 @@ namespace Python.Runtime
                 assemblyName = "Python.Runtime.Dynamic";
             }
 
+            var typeName = CreateUniqueTypeName(namespaceStr, name, baseType, typeInterfaces);
+            if (cache.TryGetValue(typeName, out Type cachedType))
+                return cachedType;
+
             ModuleBuilder moduleBuilder = GetModuleBuilder(assemblyName, moduleName);
 
             Type baseClass = baseType;
@@ -176,7 +182,7 @@ namespace Python.Runtime
                 baseClass = typeof(object);
             }
 
-            TypeBuilder typeBuilder = moduleBuilder.DefineType(name,
+            TypeBuilder typeBuilder = moduleBuilder.DefineType(typeName,
                 TypeAttributes.Public | TypeAttributes.Class,
                 baseClass,
                 interfaces.ToArray());
@@ -294,10 +300,25 @@ namespace Python.Runtime
             Assembly assembly = Assembly.GetAssembly(type);
             AssemblyManager.ScanAssembly(assembly);
 
-            // FIXME: assemblyBuilder not used
-            AssemblyBuilder assemblyBuilder = assemblyBuilders[assemblyName];
+            cache[typeName] = type;
 
             return type;
+        }
+
+        private static string CreateUniqueTypeName(
+            string? namespaceName,
+            string typeName,
+            Type baseType,
+            IEnumerable<Type> interfaces)
+        {
+            var builder = new StringBuilder();
+            if (namespaceName != null)
+                builder.Append(namespaceName + ".");
+            builder.Append(baseType.FullName);
+            foreach (Type interfaceType in interfaces)
+                builder.Append("__" + interfaceType.FullName);
+            builder.Append("__" + typeName);
+            return builder.ToString();
         }
 
         /// <summary>

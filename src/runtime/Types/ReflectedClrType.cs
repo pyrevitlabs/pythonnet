@@ -81,6 +81,7 @@ internal sealed class ReflectedClrType : PyType
                 ns,
                 assembly);
 
+            ClassManager.cache.Remove(subType);
             var py_type = GetOrCreate(subType);
 
             // by default the class dict will have all the C# methods in it, but as this is a
