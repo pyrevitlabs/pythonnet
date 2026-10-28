@@ -273,6 +273,63 @@ namespace Python.Runtime
             return Converter.ToManagedValue(value, type, out result, setError);
         }
 
+        [ThreadStatic]
+        private static int truthyBooleanScopes;
+
+        /// <summary>
+        /// Like <see cref="ToManaged(BorrowedReference, Type, out object?, bool)"/>, but a
+        /// <see cref="bool"/> or <see cref="Nullable{Boolean}"/> target also accepts any Python
+        /// object and converts it by truthiness, as IronPython does.
+        /// </summary>
+        /// <remarks>
+        /// Used where the target type is fixed: property and field assignment and delegate
+        /// return values. Method arguments use it only after no overload matched strictly, so a
+        /// <see cref="bool"/> overload never wins over an overload that takes the value itself.
+        /// </remarks>
+        internal static bool ToManagedTruthy(BorrowedReference value, Type type,
+            out object? result, bool setError)
+        {
+            using (AllowTruthyBooleans())
+            {
+                return ToManaged(value, type, out result, setError);
+            }
+        }
+
+        /// <summary>
+        /// Lets <see cref="bool"/> targets accept any Python object by truthiness on this thread
+        /// until the returned scope is disposed.
+        /// </summary>
+        internal static TruthyBooleanScope AllowTruthyBooleans()
+        {
+            truthyBooleanScopes++;
+            return default;
+        }
+
+        internal readonly struct TruthyBooleanScope : IDisposable
+        {
+            public void Dispose() => truthyBooleanScopes--;
+        }
+
+        internal static bool TakesBoolean(IEnumerable<MethodBase> methods)
+        {
+            foreach (MethodBase method in methods)
+            {
+                foreach (ParameterInfo parameter in method.GetParameters())
+                {
+                    Type type = parameter.ParameterType;
+                    if (type.IsByRef)
+                    {
+                        type = type.GetElementType();
+                    }
+                    if (type == boolType || type == typeof(bool?))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         internal static bool ToManagedValue(BorrowedReference value, Type obType,
             out object? result, bool setError)
         {
@@ -610,6 +667,16 @@ namespace Python.Runtime
                     if (value == Runtime.PyFalse)
                     {
                         result = false;
+                        return true;
+                    }
+                    if (truthyBooleanScopes > 0)
+                    {
+                        int truth = Runtime.PyObject_IsTrue(value);
+                        if (truth < 0)
+                        {
+                            goto convert_error;
+                        }
+                        result = truth != 0;
                         return true;
                     }
                     if (setError)

@@ -295,7 +295,7 @@ namespace Python.Runtime
                             return null;
                         }
                         BorrowedReference item0 = Runtime.PyTuple_GetItem(op, 0);
-                        if (!Converter.ToManaged(item0, rtype, out object? result0, true))
+                        if (!Converter.ToManagedTruthy(item0, rtype, out object? result0, true))
                         {
                             Exceptions.RaiseTypeError($"The Python function returned a tuple where element 0 was not {rtype} (the return type)");
                             throw PythonException.ThrowLastAsClrException();
@@ -331,7 +331,7 @@ namespace Python.Runtime
                     return null;
                 }
 
-                if (!Converter.ToManaged(op, rtype, out object? result, true))
+                if (!Converter.ToManagedTruthy(op, rtype, out object? result, true))
                 {
                     throw PythonException.ThrowLastAsClrException();
                 }

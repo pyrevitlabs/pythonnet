@@ -363,7 +363,21 @@ namespace Python.Runtime
                 _methods = GetMethods();
             }
 
-            return Bind(inst, args, kwargDict, _methods, matchGenerics: true);
+            Binding? binding = Bind(inst, args, kwargDict, _methods, matchGenerics: true);
+            if (binding is null && Converter.TakesBoolean(_methods))
+            {
+                PythonException? strictError = PythonException.FetchCurrentOrNullRaw();
+                using (Converter.AllowTruthyBooleans())
+                {
+                    binding = Bind(inst, args, kwargDict, _methods, matchGenerics: true);
+                }
+                if (binding is null && strictError is not null)
+                {
+                    Exceptions.Clear();
+                    strictError.Restore();
+                }
+            }
+            return binding;
         }
 
         static Binding? Bind(BorrowedReference inst, BorrowedReference args, Dictionary<string, PyObject> kwargDict, MethodBase[] methods, bool matchGenerics)
