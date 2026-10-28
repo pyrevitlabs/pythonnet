@@ -65,6 +65,9 @@ namespace Python.Runtime
             if (op == Runtime.PyBoolType)
                 return boolType;
 
+            if (op == Runtime.PyBaseObjectType)
+                return objectType;
+
             return null;
         }
 
