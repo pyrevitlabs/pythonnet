@@ -29,6 +29,7 @@ namespace Python.Runtime
             lock (encoders)
             {
                 encoders.Add(encoder);
+                clrToPython.Clear();
             }
         }
 
@@ -43,6 +44,7 @@ namespace Python.Runtime
             lock (decoders)
             {
                 decoders.Add(decoder);
+                pythonToClr.Clear();
             }
         }
 
