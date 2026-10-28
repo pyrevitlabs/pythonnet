@@ -230,10 +230,20 @@ namespace Python.Runtime
 
             // override any virtual not already overridden by the properties above
             // also override any interface method.
-            var methods = baseType.GetMethods().Concat(interfaces.SelectMany(x => x.GetMethods()));
+            var interfaceMethods = interfaces
+                .SelectMany(x => new[] { x }.Concat(x.GetInterfaces()))
+                .Distinct()
+                .SelectMany(x => x.GetMethods());
+            var methods = baseType.GetMethods().Concat(interfaceMethods);
             var virtualMethods = new HashSet<string>();
+            var overriddenSignatures = new HashSet<string>(StringComparer.Ordinal);
             foreach (MethodInfo method in methods)
             {
+                if (!overriddenSignatures.Add(MethodSignature(method)))
+                {
+                    continue;
+                }
+
                 if (!method.Attributes.HasFlag(MethodAttributes.Virtual) |
                     method.Attributes.HasFlag(MethodAttributes.Final)
                     // overriding generic virtual methods is not supported
@@ -389,6 +399,12 @@ namespace Python.Runtime
                 builder.Append('|').Append(interfaceType.AssemblyQualifiedName);
             builder.Append('|').Append(ExplicitMemberSignature(py_dict));
             return builder.ToString();
+        }
+
+        private static string MethodSignature(MethodInfo method)
+        {
+            var parameterTypes = method.GetParameters().Select(param => param.ParameterType.FullName ?? param.ParameterType.Name);
+            return method.ReturnType.FullName + " " + method.Name + "(" + string.Join(",", parameterTypes) + ")";
         }
 
         /// <summary>

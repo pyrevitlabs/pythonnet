@@ -77,6 +77,28 @@ namespace Python.Runtime
         }
 
         /// <summary>
+        /// Generates the managed type for a class that only implements .NET interfaces and
+        /// declares no <c>__namespace__</c>. Unlike an explicit request, a failure here must not
+        /// break the class statement, so it falls back to a plain Python type as before.
+        /// </summary>
+        static NewReference TryCreateInterfaceSubType(BorrowedReference name, ClassBase baseType, IList<Type> interfaces, PyDict clsDict)
+        {
+            try
+            {
+                NewReference derived = TypeManager.CreateSubType(name, baseType, interfaces, clsDict, ModuleNamespace(clsDict));
+                if (!derived.IsNull())
+                {
+                    return derived;
+                }
+            }
+            catch (Exception)
+            {
+            }
+            Exceptions.Clear();
+            return default;
+        }
+
+        /// <summary>
         /// Metatype __new__ implementation. This is called to create a new
         /// class / type when a reflected class is subclassed.
         /// </summary>
@@ -187,7 +209,11 @@ namespace Python.Runtime
                 }
                 if (implementsInterfacesOnly)
                 {
-                    return TypeManager.CreateSubType(name, baseTypes[0], interfaces, clsDict, ModuleNamespace(clsDict));
+                    NewReference derived = TryCreateInterfaceSubType(name, baseTypes[0], interfaces, clsDict);
+                    if (!derived.IsNull())
+                    {
+                        return derived;
+                    }
                 }
             }
 
