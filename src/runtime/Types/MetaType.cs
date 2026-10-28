@@ -66,6 +66,16 @@ namespace Python.Runtime
             return PyCLRMetaType;
         }
 
+        static string? ModuleNamespace(PyDict clsDict)
+        {
+            if (!clsDict.HasKey("__module__"))
+            {
+                return null;
+            }
+            using var module = clsDict["__module__"];
+            return PyString.IsStringType(module) ? module.As<string>() : null;
+        }
+
         /// <summary>
         /// Metatype __new__ implementation. This is called to create a new
         /// class / type when a reflected class is subclassed.
@@ -120,7 +130,8 @@ namespace Python.Runtime
                 }
             }
             // if the base type count is 0, there might still be interfaces to implement.
-            if (baseTypes.Count == 0)
+            bool implementsInterfacesOnly = baseTypes.Count == 0;
+            if (implementsInterfacesOnly)
             {
                 baseTypes.Add(new ClassBase(typeof(object)));
             }
@@ -173,6 +184,10 @@ namespace Python.Runtime
                 if (clsDict.HasKey("__assembly__") || clsDict.HasKey("__namespace__"))
                 {
                     return TypeManager.CreateSubType(name, baseTypes[0], interfaces, clsDict);
+                }
+                if (implementsInterfacesOnly)
+                {
+                    return TypeManager.CreateSubType(name, baseTypes[0], interfaces, clsDict, ModuleNamespace(clsDict));
                 }
             }
 

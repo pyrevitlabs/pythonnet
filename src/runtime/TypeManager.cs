@@ -374,7 +374,7 @@ namespace Python.Runtime
             return new PyTuple(bases);
         }
 
-        internal static NewReference CreateSubType(BorrowedReference py_name, ClassBase py_base_type, IList<Type> interfaces, BorrowedReference dictRef)
+        internal static NewReference CreateSubType(BorrowedReference py_name, ClassBase py_base_type, IList<Type> interfaces, BorrowedReference dictRef, string? defaultNamespace = null)
         {
             // Utility to create a subtype of a managed type with the ability for the
             // a python subtype able to override the managed implementation
@@ -388,7 +388,7 @@ namespace Python.Runtime
             // the derived class can have class attributes __assembly__ and __module__ which
             // control the name of the assembly and module the new type is created in.
             object? assembly = null;
-            object? namespaceStr = null;
+            object? namespaceStr = defaultNamespace;
 
             using (var assemblyKey = new PyString("__assembly__"))
             {
