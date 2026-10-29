@@ -13,6 +13,10 @@ namespace Python.Runtime
     /// This class allows to register additional marshalling codecs.
     /// <para>Python.NET will pick suitable encoder/decoder registered first</para>
     /// </summary>
+    /// <remarks>
+    /// Codecs' <c>CanDecode</c> and <c>CanEncode</c> run outside the registry lock, because a
+    /// codec may run Python code, which can hand the GIL to a thread already waiting on that lock.
+    /// </remarks>
     public static class PyObjectConversions
     {
         static readonly DecoderGroup decoders = new();
@@ -67,10 +71,12 @@ namespace Python.Runtime
             clrToPython = new();
         static IPyObjectEncoder[] GetEncoders(Type type)
         {
+            IPyObjectEncoder[] registered;
             lock (encoders)
             {
-                return encoders.GetEncoders(type).ToArray();
+                registered = encoders.ToArray();
             }
+            return registered.SelectMany(encoder => encoder.GetEncoders(type)).ToArray();
         }
         #endregion
 
@@ -95,12 +101,15 @@ namespace Python.Runtime
             Debug.Assert(PyType.IsType(sourceTypeRef));
             var pyType = new PyType(sourceTypeRef, prevalidated: true);
 
-            IPyObjectDecoder? decoder;
+            IPyObjectDecoder[] registered;
             lock (decoders)
             {
-                decoder = decoders.GetDecoder(pyType, targetType);
-                if (decoder == null) return default;
+                registered = decoders.ToArray();
             }
+            IPyObjectDecoder? decoder = registered
+                .Select(candidate => candidate.GetDecoder(pyType, targetType))
+                .FirstOrDefault(found => found != null);
+            if (decoder == null) return default;
 
             var decode = genericDecode.MakeGenericMethod(targetType)!;
 
