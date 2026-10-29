@@ -147,13 +147,19 @@ namespace Python.Runtime
         /// methods overridden to call out to python if the associated python
         /// object has overridden the method.
         /// </summary>
+        /// <param name="definitionSite">
+        /// Where the Python class was defined, part of the cache key so classes that share a name
+        /// and shape but come from different sources never share a generated type; null when the
+        /// caller asks for the type by explicit namespace, which keeps its type shared by name.
+        /// </param>
         internal static Type CreateDerivedType(string name,
             Type baseType,
             IList<Type> typeInterfaces,
             BorrowedReference py_dict,
             string? namespaceStr,
             string? assemblyName,
-            string moduleName = "Python.Runtime.Dynamic.dll")
+            string moduleName = "Python.Runtime.Dynamic.dll",
+            string? definitionSite = null)
         {
             // TODO: clean up
             if (null != namespaceStr)
@@ -166,7 +172,7 @@ namespace Python.Runtime
                 assemblyName = "Python.Runtime.Dynamic";
             }
 
-            var shapeKey = CreateShapeKey(name, baseType, typeInterfaces, py_dict, assemblyName, moduleName);
+            var shapeKey = CreateShapeKey(name, baseType, typeInterfaces, py_dict, assemblyName, moduleName, definitionSite);
             if (cache.TryGetValue(shapeKey, out Type cachedType))
                 return cachedType;
 
@@ -292,22 +298,25 @@ namespace Python.Runtime
                 }
             }
 
-            // add the destructor so the python object created in the constructor gets destroyed
-            MethodBuilder methodBuilder = typeBuilder.DefineMethod("Finalize",
-                MethodAttributes.Family |
-                MethodAttributes.Virtual |
-                MethodAttributes.HideBySig,
-                CallingConventions.Standard,
-                typeof(void),
-                Type.EmptyTypes);
-            ILGenerator il = methodBuilder.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0);
+            if (!typeof(IPythonDerivedType).IsAssignableFrom(baseClass))
+            {
+                // add the destructor so the python object created in the constructor gets destroyed
+                MethodBuilder methodBuilder = typeBuilder.DefineMethod("Finalize",
+                    MethodAttributes.Family |
+                    MethodAttributes.Virtual |
+                    MethodAttributes.HideBySig,
+                    CallingConventions.Standard,
+                    typeof(void),
+                    Type.EmptyTypes);
+                ILGenerator il = methodBuilder.GetILGenerator();
+                il.Emit(OpCodes.Ldarg_0);
 #pragma warning disable CS0618 // PythonDerivedType is for internal use only
-            il.Emit(OpCodes.Call, typeof(PythonDerivedType).GetMethod(nameof(PyFinalize)));
+                il.Emit(OpCodes.Call, typeof(PythonDerivedType).GetMethod(nameof(PyFinalize)));
 #pragma warning restore CS0618 // PythonDerivedType is for internal use only
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, baseClass.GetMethod("Finalize", BindingFlags.NonPublic | BindingFlags.Instance));
-            il.Emit(OpCodes.Ret);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, baseClass.GetMethod("Finalize", BindingFlags.NonPublic | BindingFlags.Instance));
+                il.Emit(OpCodes.Ret);
+            }
 
             Type type = typeBuilder.CreateType();
 
@@ -390,10 +399,12 @@ namespace Python.Runtime
             IEnumerable<Type> interfaces,
             BorrowedReference py_dict,
             string assemblyName,
-            string moduleName)
+            string moduleName,
+            string? definitionSite)
         {
             var builder = new StringBuilder();
             builder.Append(assemblyName).Append('|').Append(moduleName).Append('|').Append(typeName);
+            builder.Append('|').Append(definitionSite);
             builder.Append('|').Append(baseType.AssemblyQualifiedName);
             foreach (Type interfaceType in interfaces)
                 builder.Append('|').Append(interfaceType.AssemblyQualifiedName);

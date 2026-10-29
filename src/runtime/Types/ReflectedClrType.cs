@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 
 using static Python.Runtime.PythonException;
@@ -70,7 +71,7 @@ internal sealed class ReflectedClrType : PyType
 
     internal static NewReference CreateSubclass(ClassBase baseClass, IList<Type> interfaces,
                                                 string name, string? assembly, string? ns,
-                                                BorrowedReference dict)
+                                                BorrowedReference dict, string? definitionSite = null)
     {
         try
         {
@@ -79,7 +80,8 @@ internal sealed class ReflectedClrType : PyType
                 interfaces,
                 dict,
                 ns,
-                assembly);
+                assembly,
+                definitionSite: definitionSite);
 
             ClassManager.cache.Remove(subType);
             var py_type = GetOrCreate(subType);
@@ -95,6 +97,10 @@ internal sealed class ReflectedClrType : PyType
                 ThrowIfIsNotZero(Runtime.PyCell_Set(cell, py_type));
                 ThrowIfIsNotZero(Runtime.PyDict_DelItemString(cls_dict, "__classcell__"));
             }
+            WrapAsClassMethod(cls_dict, "__init_subclass__");
+            AddInstanceDictDescriptor(py_type, cls_dict);
+            Runtime.PyType_Modified(py_type);
+            WrapAsClassMethod(cls_dict, "__class_getitem__");
 
             return new NewReference(py_type);
         }
@@ -102,6 +108,57 @@ internal sealed class ReflectedClrType : PyType
         {
             return Exceptions.RaiseTypeError(e.Message);
         }
+    }
+
+    /// <summary>
+    /// Makes a plain function stored under <paramref name="name"/> a classmethod, as
+    /// <c>type.__new__</c> does for <c>__init_subclass__</c> and <c>__class_getitem__</c>.
+    /// </summary>
+    static void WrapAsClassMethod(BorrowedReference classDict, string name)
+    {
+        BorrowedReference member = Runtime.PyDict_GetItemString(classDict, name);
+        if (member.IsNull)
+        {
+            return;
+        }
+        using var types = PyModule.Import("types");
+        using var functionType = types.GetAttr("FunctionType");
+        if (Runtime.PyObject_TYPE(member) != functionType.Reference)
+        {
+            return;
+        }
+        using var builtins = PyModule.Import("builtins");
+        using var classMethod = builtins.GetAttr("classmethod");
+        using var function = new PyObject(member);
+        using var wrapped = classMethod.Invoke(function);
+        ThrowIfIsNotZero(Runtime.PyDict_SetItemString(classDict, name, wrapped));
+    }
+
+    static IntPtr instanceDictGetSet;
+
+    /// <summary>
+    /// Exposes the instance dictionary as <c>__dict__</c>, which <c>type.__new__</c> would have
+    /// added, so <c>vars()</c> and descriptors such as <c>functools.cached_property</c> work.
+    /// </summary>
+    static void AddInstanceDictDescriptor(PyType type, BorrowedReference classDict)
+    {
+        if (Util.ReadInt32(type, TypeOffset.tp_dictoffset) <= 0
+            || !Runtime.PyDict_GetItemString(classDict, "__dict__").IsNull)
+        {
+            return;
+        }
+        if (instanceDictGetSet == IntPtr.Zero)
+        {
+            IntPtr getSet = Marshal.AllocHGlobal(5 * IntPtr.Size);
+            Marshal.WriteIntPtr(getSet, 0, Marshal.StringToHGlobalAnsi("__dict__"));
+            Marshal.WriteIntPtr(getSet, IntPtr.Size, Runtime.PyObject_GenericGetDictAddress);
+            Marshal.WriteIntPtr(getSet, 2 * IntPtr.Size, Runtime.PyObject_GenericSetDictAddress);
+            Marshal.WriteIntPtr(getSet, 3 * IntPtr.Size, IntPtr.Zero);
+            Marshal.WriteIntPtr(getSet, 4 * IntPtr.Size, IntPtr.Zero);
+            instanceDictGetSet = getSet;
+        }
+        using var descriptor = Runtime.PyDescr_NewGetSet(type, instanceDictGetSet);
+        ThrowIfIsNotZero(Runtime.PyDict_SetItemString(classDict, "__dict__", descriptor.BorrowOrThrow()));
     }
 
     static ReflectedClrType AllocateClass(Type clrType)

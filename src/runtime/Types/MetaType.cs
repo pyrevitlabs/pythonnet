@@ -77,15 +77,34 @@ namespace Python.Runtime
         }
 
         /// <summary>
+        /// The <c>__file__</c> of the globals the class statement runs in, so same-named classes
+        /// from different scripts, which all run as <c>__main__</c>, never share a generated type.
+        /// </summary>
+        static string? DefinitionSite()
+        {
+            BorrowedReference globals = Runtime.PyEval_GetGlobals();
+            if (globals.IsNull)
+            {
+                return null;
+            }
+            BorrowedReference file = Runtime.PyDict_GetItemString(globals, "__file__");
+            return !file.IsNull && Runtime.PyString_Check(file) ? Runtime.GetManagedString(file) : null;
+        }
+
+        /// <summary>
         /// Generates the managed type for a class that only implements .NET interfaces and
         /// declares no <c>__namespace__</c>. Unlike an explicit request, a failure here must not
         /// break the class statement, so it falls back to a plain Python type as before.
         /// </summary>
+        /// <remarks>
+        /// The type is shared only by classes of the same name and shape defined from the same
+        /// file, so re-running a script reuses it while another script's class never takes it over.
+        /// </remarks>
         static NewReference TryCreateInterfaceSubType(BorrowedReference name, ClassBase baseType, IList<Type> interfaces, PyDict clsDict)
         {
             try
             {
-                NewReference derived = TypeManager.CreateSubType(name, baseType, interfaces, clsDict, ModuleNamespace(clsDict));
+                NewReference derived = TypeManager.CreateSubType(name, baseType, interfaces, clsDict, ModuleNamespace(clsDict), DefinitionSite());
                 if (!derived.IsNull())
                 {
                     return derived;
@@ -205,14 +224,14 @@ namespace Python.Runtime
                 using var clsDict = new PyDict(dict);
                 if (clsDict.HasKey("__assembly__") || clsDict.HasKey("__namespace__"))
                 {
-                    return TypeManager.CreateSubType(name, baseTypes[0], interfaces, clsDict);
+                    return RunClassCreationHooks(TypeManager.CreateSubType(name, baseTypes[0], interfaces, clsDict), dict, kw);
                 }
                 if (implementsInterfacesOnly)
                 {
                     NewReference derived = TryCreateInterfaceSubType(name, baseTypes[0], interfaces, clsDict);
                     if (!derived.IsNull())
                     {
-                        return derived;
+                        return RunClassCreationHooks(derived, dict, kw);
                     }
                 }
             }
@@ -261,6 +280,57 @@ namespace Python.Runtime
             return type;
         }
 
+
+        /// <summary>
+        /// Finishes a class whose type was generated rather than built by <c>type.__new__</c>, by
+        /// running the class-creation protocol <c>type.__new__</c> would: <c>__set_name__</c> on
+        /// every namespace value that defines it, then the parent's <c>__init_subclass__</c> with
+        /// the class keywords.
+        /// </summary>
+        /// <remarks>Takes ownership of <paramref name="type"/>; returns null with the Python error set on failure.</remarks>
+        static NewReference RunClassCreationHooks(NewReference type, BorrowedReference namespaceDict, BorrowedReference kw)
+        {
+            if (type.IsNull())
+            {
+                return type;
+            }
+            try
+            {
+                using var cls = new PyObject(type.Borrow());
+                using var namespaceItems = new PyDict(namespaceDict);
+                using (var members = namespaceItems.Items())
+                {
+                    foreach (PyObject member in members)
+                    {
+                        using (member)
+                        using (var memberName = member[0])
+                        using (var value = member[1])
+                        using (var valueType = value.GetPythonType())
+                        {
+                            if (!valueType.HasAttr("__set_name__"))
+                            {
+                                continue;
+                            }
+                            using var setName = valueType.GetAttr("__set_name__");
+                            setName.Invoke(value, cls, memberName).Dispose();
+                        }
+                    }
+                }
+                using var builtins = PyModule.Import("builtins");
+                using var super = builtins.GetAttr("super");
+                using var parent = super.Invoke(cls, cls);
+                using var initSubclass = parent.GetAttr("__init_subclass__");
+                using var keywords = kw.IsNull ? null : new PyDict(kw);
+                initSubclass.Invoke(Array.Empty<PyObject>(), keywords).Dispose();
+                return type;
+            }
+            catch (PythonException error)
+            {
+                type.Dispose();
+                error.Restore();
+                return default;
+            }
+        }
 
         public static NewReference tp_alloc(BorrowedReference mt, nint n)
             => Runtime.PyType_GenericAlloc(mt, n);
