@@ -99,8 +99,8 @@ internal sealed class ReflectedClrType : PyType
             }
             WrapAsClassMethod(cls_dict, "__init_subclass__");
             AddInstanceDictDescriptor(py_type, cls_dict);
-            Runtime.PyType_Modified(py_type);
             WrapAsClassMethod(cls_dict, "__class_getitem__");
+            Runtime.PyType_Modified(py_type);
 
             return new NewReference(py_type);
         }
