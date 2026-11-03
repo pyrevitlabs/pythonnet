@@ -16,6 +16,18 @@ class IteratorMixin(col.Iterator):
 class IterableMixin(col.Iterable):
     pass
 
+class DisposableMixin:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if hasattr(self, 'Dispose'):
+            self.Dispose()
+        else:
+            from System import IDisposable
+            IDisposable(self).Dispose()
+        return False
+
 class SizedMixin(col.Sized):
     def __len__(self): return self.Count
 

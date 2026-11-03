@@ -1647,6 +1647,12 @@ namespace Python.Runtime
         internal static NewReference PyObject_GenericGetDict(BorrowedReference o) => PyObject_GenericGetDict(o, IntPtr.Zero);
         internal static NewReference PyObject_GenericGetDict(BorrowedReference o, IntPtr context) => Delegates.PyObject_GenericGetDict(o, context);
 
+        internal static IntPtr PyObject_GenericGetDictAddress => (IntPtr)Delegates.PyObject_GenericGetDict;
+
+        internal static IntPtr PyObject_GenericSetDictAddress => (IntPtr)Delegates.PyObject_GenericSetDict;
+
+        internal static NewReference PyDescr_NewGetSet(BorrowedReference type, IntPtr getset) => Delegates.PyDescr_NewGetSet(type, getset);
+
         internal static void PyObject_GC_Del(StolenReference ob) => Delegates.PyObject_GC_Del(ob);
 
 

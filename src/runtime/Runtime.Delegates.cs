@@ -227,6 +227,8 @@ public unsafe partial class Runtime
             _PyType_Lookup = (delegate* unmanaged[Cdecl]<BorrowedReference, BorrowedReference, BorrowedReference>)GetFunctionByName(nameof(_PyType_Lookup), GetUnmanagedDll(_PythonDll));
             PyObject_GenericGetAttr = (delegate* unmanaged[Cdecl]<BorrowedReference, BorrowedReference, NewReference>)GetFunctionByName(nameof(PyObject_GenericGetAttr), GetUnmanagedDll(_PythonDll));
             PyObject_GenericGetDict = (delegate* unmanaged[Cdecl]<BorrowedReference, IntPtr, NewReference>)GetFunctionByName(nameof(PyObject_GenericGetDict), GetUnmanagedDll(PythonDLL));
+            PyObject_GenericSetDict = (delegate* unmanaged[Cdecl]<BorrowedReference, BorrowedReference, IntPtr, int>)GetFunctionByName(nameof(PyObject_GenericSetDict), GetUnmanagedDll(PythonDLL));
+            PyDescr_NewGetSet = (delegate* unmanaged[Cdecl]<BorrowedReference, IntPtr, NewReference>)GetFunctionByName(nameof(PyDescr_NewGetSet), GetUnmanagedDll(PythonDLL));
             PyObject_GenericSetAttr = (delegate* unmanaged[Cdecl]<BorrowedReference, BorrowedReference, BorrowedReference, int>)GetFunctionByName(nameof(PyObject_GenericSetAttr), GetUnmanagedDll(_PythonDll));
             PyObject_GC_Del = (delegate* unmanaged[Cdecl]<StolenReference, void>)GetFunctionByName(nameof(PyObject_GC_Del), GetUnmanagedDll(_PythonDll));
             try
@@ -534,6 +536,8 @@ public unsafe partial class Runtime
         internal static delegate* unmanaged[Cdecl]<uint, BorrowedReference, int> PyThreadState_SetAsyncExcLLP64 { get; }
         internal static delegate* unmanaged[Cdecl]<ulong, BorrowedReference, int> PyThreadState_SetAsyncExcLP64 { get; }
         internal static delegate* unmanaged[Cdecl]<BorrowedReference, IntPtr, NewReference> PyObject_GenericGetDict { get; }
+        internal static delegate* unmanaged[Cdecl]<BorrowedReference, BorrowedReference, IntPtr, int> PyObject_GenericSetDict { get; }
+        internal static delegate* unmanaged[Cdecl]<BorrowedReference, IntPtr, NewReference> PyDescr_NewGetSet { get; }
         internal static delegate* unmanaged[Cdecl]<BorrowedReference, TypeSlotID, IntPtr> PyType_GetSlot { get; }
         internal static delegate* unmanaged[Cdecl]<in NativeTypeSpec, BorrowedReference, NewReference> PyType_FromSpecWithBases { get; }
         internal static delegate* unmanaged[Cdecl]<BorrowedReference, void> _Py_NewReference { get; }

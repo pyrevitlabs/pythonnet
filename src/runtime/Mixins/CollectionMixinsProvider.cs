@@ -63,6 +63,11 @@ namespace Python.Runtime.Mixins
                 newBases.Add(new PyType(this.Mixins.GetAttr("IteratorMixin")));
             }
 
+            if (interfaces.Contains(typeof(IDisposable)))
+            {
+                newBases.Add(new PyType(this.Mixins.GetAttr("DisposableMixin")));
+            }
+
             if (newBases.Count == existingBases.Count)
             {
                 return existingBases;

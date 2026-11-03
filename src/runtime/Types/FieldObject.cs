@@ -122,7 +122,7 @@ namespace Python.Runtime
                 }
             }
 
-            if (!Converter.ToManaged(val, info.FieldType, out var newval, true))
+            if (!Converter.ToManagedTruthy(val, info.FieldType, out var newval, true))
             {
                 return -1;
             }

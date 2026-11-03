@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
+using System.Text;
 
 using Python.Runtime.Native;
 
@@ -33,6 +34,8 @@ namespace Python.Runtime
     {
         private static Dictionary<string, AssemblyBuilder> assemblyBuilders;
         private static Dictionary<Tuple<string, string>, ModuleBuilder> moduleBuilders;
+        private static readonly Dictionary<string, Type> cache = new();
+        private static readonly Dictionary<string, HashSet<string>> emittedTypeNames = new();
 
         static ClassDerivedObject()
         {
@@ -44,6 +47,8 @@ namespace Python.Runtime
         {
             assemblyBuilders = new Dictionary<string, AssemblyBuilder>();
             moduleBuilders = new Dictionary<Tuple<string, string>, ModuleBuilder>();
+            cache.Clear();
+            emittedTypeNames.Clear();
         }
 
         internal ClassDerivedObject(Type tp) : base(tp)
@@ -142,13 +147,19 @@ namespace Python.Runtime
         /// methods overridden to call out to python if the associated python
         /// object has overridden the method.
         /// </summary>
+        /// <param name="definitionSite">
+        /// Where the Python class was defined, part of the cache key so classes that share a name
+        /// and shape but come from different sources never share a generated type; null when the
+        /// caller asks for the type by explicit namespace, which keeps its type shared by name.
+        /// </param>
         internal static Type CreateDerivedType(string name,
             Type baseType,
             IList<Type> typeInterfaces,
             BorrowedReference py_dict,
             string? namespaceStr,
             string? assemblyName,
-            string moduleName = "Python.Runtime.Dynamic.dll")
+            string moduleName = "Python.Runtime.Dynamic.dll",
+            string? definitionSite = null)
         {
             // TODO: clean up
             if (null != namespaceStr)
@@ -160,6 +171,12 @@ namespace Python.Runtime
             {
                 assemblyName = "Python.Runtime.Dynamic";
             }
+
+            var shapeKey = CreateShapeKey(name, baseType, typeInterfaces, py_dict, assemblyName, moduleName, definitionSite);
+            if (cache.TryGetValue(shapeKey, out Type cachedType))
+                return cachedType;
+
+            var typeName = ReserveTypeName(assemblyName, name, shapeKey);
 
             ModuleBuilder moduleBuilder = GetModuleBuilder(assemblyName, moduleName);
 
@@ -176,7 +193,7 @@ namespace Python.Runtime
                 baseClass = typeof(object);
             }
 
-            TypeBuilder typeBuilder = moduleBuilder.DefineType(name,
+            TypeBuilder typeBuilder = moduleBuilder.DefineType(typeName,
                 TypeAttributes.Public | TypeAttributes.Class,
                 baseClass,
                 interfaces.ToArray());
@@ -219,10 +236,20 @@ namespace Python.Runtime
 
             // override any virtual not already overridden by the properties above
             // also override any interface method.
-            var methods = baseType.GetMethods().Concat(interfaces.SelectMany(x => x.GetMethods()));
+            var interfaceMethods = interfaces
+                .SelectMany(x => new[] { x }.Concat(x.GetInterfaces()))
+                .Distinct()
+                .SelectMany(x => x.GetMethods());
+            var methods = baseType.GetMethods().Concat(interfaceMethods);
             var virtualMethods = new HashSet<string>();
+            var overriddenSignatures = new HashSet<string>(StringComparer.Ordinal);
             foreach (MethodInfo method in methods)
             {
+                if (!overriddenSignatures.Add(MethodSignature(method)))
+                {
+                    continue;
+                }
+
                 if (!method.Attributes.HasFlag(MethodAttributes.Virtual) |
                     method.Attributes.HasFlag(MethodAttributes.Final)
                     // overriding generic virtual methods is not supported
@@ -271,22 +298,25 @@ namespace Python.Runtime
                 }
             }
 
-            // add the destructor so the python object created in the constructor gets destroyed
-            MethodBuilder methodBuilder = typeBuilder.DefineMethod("Finalize",
-                MethodAttributes.Family |
-                MethodAttributes.Virtual |
-                MethodAttributes.HideBySig,
-                CallingConventions.Standard,
-                typeof(void),
-                Type.EmptyTypes);
-            ILGenerator il = methodBuilder.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0);
+            if (!typeof(IPythonDerivedType).IsAssignableFrom(baseClass))
+            {
+                // add the destructor so the python object created in the constructor gets destroyed
+                MethodBuilder methodBuilder = typeBuilder.DefineMethod("Finalize",
+                    MethodAttributes.Family |
+                    MethodAttributes.Virtual |
+                    MethodAttributes.HideBySig,
+                    CallingConventions.Standard,
+                    typeof(void),
+                    Type.EmptyTypes);
+                ILGenerator il = methodBuilder.GetILGenerator();
+                il.Emit(OpCodes.Ldarg_0);
 #pragma warning disable CS0618 // PythonDerivedType is for internal use only
-            il.Emit(OpCodes.Call, typeof(PythonDerivedType).GetMethod(nameof(PyFinalize)));
+                il.Emit(OpCodes.Call, typeof(PythonDerivedType).GetMethod(nameof(PyFinalize)));
 #pragma warning restore CS0618 // PythonDerivedType is for internal use only
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, baseClass.GetMethod("Finalize", BindingFlags.NonPublic | BindingFlags.Instance));
-            il.Emit(OpCodes.Ret);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, baseClass.GetMethod("Finalize", BindingFlags.NonPublic | BindingFlags.Instance));
+                il.Emit(OpCodes.Ret);
+            }
 
             Type type = typeBuilder.CreateType();
 
@@ -294,10 +324,120 @@ namespace Python.Runtime
             Assembly assembly = Assembly.GetAssembly(type);
             AssemblyManager.ScanAssembly(assembly);
 
-            // FIXME: assemblyBuilder not used
-            AssemblyBuilder assemblyBuilder = assemblyBuilders[assemblyName];
+            cache[shapeKey] = type;
 
             return type;
+        }
+
+        /// <summary>
+        /// Describes the explicit CLR members a Python class declares, so a redefinition that
+        /// adds, removes or retypes them gets a new generated type instead of a cached one.
+        /// </summary>
+        private static string ExplicitMemberSignature(BorrowedReference py_dict)
+        {
+            if (py_dict == null || !Runtime.PyDict_Check(py_dict))
+                return string.Empty;
+
+            var members = new List<string>();
+            using var dict = new PyDict(py_dict);
+            using var keys = dict.Keys();
+            foreach (PyObject pyKey in keys)
+            {
+                using (pyKey)
+                using (var value = dict[pyKey])
+                {
+                    if (value.HasAttr("_clr_property_type_"))
+                    {
+                        using var propertyType = value.GetAttr("_clr_property_type_");
+                        string accessors = (HasTruthyAttr(value, "fget") ? "g" : "")
+                            + (HasTruthyAttr(value, "fset") ? "s" : "");
+                        members.Add("P:" + pyKey + ":" + propertyType + ":" + accessors);
+                    }
+                    if (value.HasAttr("_clr_return_type_") && value.HasAttr("_clr_arg_types_"))
+                    {
+                        using var returnType = value.GetAttr("_clr_return_type_");
+                        using var argTypes = value.GetAttr("_clr_arg_types_");
+                        string methodName = pyKey.ToString()!;
+                        if (value.HasAttr("_clr_method_name_"))
+                        {
+                            using var declaredName = value.GetAttr("_clr_method_name_");
+                            methodName = declaredName.ToString()!;
+                        }
+                        members.Add("M:" + methodName + ":" + returnType + ":" + argTypes);
+                    }
+                }
+            }
+            members.Sort(StringComparer.Ordinal);
+            return string.Join("|", members);
+        }
+
+        private static string StableHash(string text)
+        {
+            unchecked
+            {
+                uint hash = 2166136261;
+                foreach (char character in text)
+                {
+                    hash ^= character;
+                    hash *= 16777619;
+                }
+                return hash.ToString("x8");
+            }
+        }
+
+        private static bool HasTruthyAttr(PyObject value, string attributeName)
+        {
+            if (!value.HasAttr(attributeName))
+                return false;
+            using var attribute = value.GetAttr(attributeName);
+            return attribute.IsTrue();
+        }
+
+        private static string CreateShapeKey(
+            string typeName,
+            Type baseType,
+            IEnumerable<Type> interfaces,
+            BorrowedReference py_dict,
+            string assemblyName,
+            string moduleName,
+            string? definitionSite)
+        {
+            var builder = new StringBuilder();
+            builder.Append(assemblyName).Append('|').Append(moduleName).Append('|').Append(typeName);
+            builder.Append('|').Append(definitionSite);
+            builder.Append('|').Append(baseType.AssemblyQualifiedName);
+            foreach (Type interfaceType in interfaces)
+                builder.Append('|').Append(interfaceType.AssemblyQualifiedName);
+            builder.Append('|').Append(ExplicitMemberSignature(py_dict));
+            return builder.ToString();
+        }
+
+        private static string MethodSignature(MethodInfo method)
+        {
+            var parameterTypes = method.GetParameters().Select(param => param.ParameterType.FullName ?? param.ParameterType.Name);
+            return method.ReturnType.FullName + " " + method.Name + "(" + string.Join(",", parameterTypes) + ")";
+        }
+
+        /// <summary>
+        /// Picks the CLR name for a new generated type. The first shape of a Python class keeps
+        /// its visible name so it stays importable from its namespace; later shapes with the same
+        /// name get a short hexadecimal hash suffix because an assembly cannot define a name twice.
+        /// </summary>
+        private static string ReserveTypeName(string assemblyName, string typeName, string shapeKey)
+        {
+            if (!emittedTypeNames.TryGetValue(assemblyName, out HashSet<string> names))
+            {
+                names = new HashSet<string>(StringComparer.Ordinal);
+                emittedTypeNames[assemblyName] = names;
+            }
+
+            string candidate = typeName;
+            string hashedName = typeName + "_" + StableHash(shapeKey);
+            for (int attempt = 1; names.Contains(candidate); attempt++)
+                candidate = attempt == 1 ? hashedName : hashedName + "_" + attempt;
+
+            names.Add(candidate);
+            return candidate;
         }
 
         /// <summary>

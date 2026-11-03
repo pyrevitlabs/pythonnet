@@ -29,6 +29,22 @@ def interface_test_class_fixture(subnamespace):
     return InterfaceTestClass
 
 
+def redefine_interface_test_class_fixture(subnamespace):
+    """Redefine InterfaceTestClass with the same CLR identity and new behaviour."""
+
+    class InterfaceTestClass(IInterfaceTest):
+        """class that implements the test interface"""
+        __namespace__ = "Python.Test." + subnamespace
+
+        def foo(self):
+            return "InterfaceTestClass2"
+
+        def bar(self, x, i):
+            return "/".join([x] * i)
+
+    return InterfaceTestClass
+
+
 def interface_generic_class_fixture(subnamespace):
 
     class GenericInterfaceImpl(IGenericInterface[int]):
@@ -145,6 +161,20 @@ def test_derived_class():
 
     x = FunctionsTest.pass_through(ob)
     assert id(x) == id(ob)
+
+
+def test_redefine_class():
+    """Classes with the same CLR identity keep working after redefinition."""
+    InterfaceTestClass = interface_test_class_fixture(test_redefine_class.__name__)
+    ob = InterfaceTestClass()
+    assert ob.foo() == "InterfaceTestClass"
+
+    InterfaceTestClass = redefine_interface_test_class_fixture(
+        test_redefine_class.__name__
+    )
+    ob = InterfaceTestClass()
+    assert ob.foo() == "InterfaceTestClass2"
+
 
 def test_broken_derived_class():
     """Test python class derived from managed type with invalid namespace"""

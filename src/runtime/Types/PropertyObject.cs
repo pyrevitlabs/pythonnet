@@ -124,7 +124,7 @@ namespace Python.Runtime
             }
 
 
-            if (!Converter.ToManaged(val, info.PropertyType, out var newval, true))
+            if (!Converter.ToManagedTruthy(val, info.PropertyType, out var newval, true))
             {
                 return -1;
             }
